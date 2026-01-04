@@ -1,7 +1,10 @@
 require('dotenv').config();
 const {
-    Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder,
-    IntegrationType, InteractionContextType
+    Client,
+    GatewayIntentBits,
+    REST,
+    Routes,
+    SlashCommandBuilder
 } = require('discord.js');
 const mongoose = require('mongoose');
 
@@ -15,7 +18,7 @@ const Data = mongoose.model('NekoData', new mongoose.Schema({
     guildId: String,
     type: String,                 // tx | bc
     val: mongoose.Schema.Types.Mixed,
-    side: String,                 // KQ thật (TX)
+    side: String,                 // kết quả thật (TX)
     predict: String,              // bot đoán
     createdAt: { type: Date, default: Date.now }
 }));
@@ -37,13 +40,11 @@ const client = new Client({
 
 const NEKO_ID = "1248205177589334026";
 
-// ===== SLASH COMMANDS =====
+// ===== SLASH COMMANDS (KHÔNG INTEGRATION, KHÔNG CONTEXT) =====
 const commands = [
     new SlashCommandBuilder()
         .setName('setup')
         .setDescription('định dạng server')
-        .setIntegrationTypes(IntegrationType.UserInstall)
-        .setContexts(InteractionContextType.Guild)
         .addStringOption(o =>
             o.setName('ten').setDescription('sv1, sv2...').setRequired(true)
         ),
@@ -51,12 +52,6 @@ const commands = [
     new SlashCommandBuilder()
         .setName('dudoancobac')
         .setDescription('Soi cầu dự đoán')
-        .setIntegrationTypes(IntegrationType.UserInstall)
-        .setContexts(
-            InteractionContextType.Guild,
-            InteractionContextType.BotDM,
-            InteractionContextType.PrivateChannel
-        )
         .addStringOption(o =>
             o.setName('ten_sv').setDescription('Server').setRequired(true).setAutocomplete(true)
         )
@@ -71,12 +66,6 @@ const commands = [
     new SlashCommandBuilder()
         .setName('luucau')
         .setDescription('Dán KQ Neko để lưu')
-        .setIntegrationTypes(IntegrationType.UserInstall)
-        .setContexts(
-            InteractionContextType.Guild,
-            InteractionContextType.BotDM,
-            InteractionContextType.PrivateChannel
-        )
         .addStringOption(o =>
             o.setName('ten_sv').setDescription('Server').setRequired(true).setAutocomplete(true)
         )
@@ -85,6 +74,7 @@ const commands = [
         )
 ].map(c => c.toJSON());
 
+// ===== REGISTER COMMANDS =====
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 (async () => {
     try {
@@ -219,17 +209,16 @@ async function soiCauTX(gId) {
 
     const last = h[0];
 
-    // nếu ván trước bot đoán mà sai -> LÌ
+    // LÌ nếu sai
     if (last.predict && last.side !== last.predict) {
-        return `${last.predict} (Lì tới chết)`;
+        return `${last.predict} (Lì)`;
     }
 
-    // tính tỉ lệ
+    // TỈ LỆ
     let t = 0, x = 0;
     h.forEach(i => i.side === 'Tài' ? t++ : x++);
     const pick = t >= x ? 'Tài' : 'Xỉu';
 
-    // lưu dự đoán cho ván tới
     await Data.create({
         guildId: gId,
         type: 'tx',
@@ -239,23 +228,31 @@ async function soiCauTX(gId) {
     return `${pick.toUpperCase()} (Tỉ lệ)`;
 }
 
-// ===== SOI BC (GIỮ NGUYÊN, ĐƠN GIẢN) =====
+// ===== SOI BC (TỈ LỆ + LÌ 1 CON) =====
 async function soiCauBC(gId) {
-    const h = await Data.find({ guildId: gId, type: 'bc' })
-        .sort({ createdAt: -1 }).limit(10);
-    if (h.length < 4) return "Ít data.";
+    const h = await Data.find({ guildId: gId, type: 'bc', val: { $exists: true } })
+        .sort({ createdAt: -1 }).limit(15);
+    if (h.length < 5) return "Ít data, né.";
 
-    const icons = { nai:"🦌", ga:"🐔", ca:"🐟", bau:"🎃", cua:"🦀", tom:"🦐" };
-    const c = {};
-    h.flatMap(i => i.val).forEach(v => c[v] = (c[v] || 0) + 1);
+    const last = h[0];
 
-    const hot = Object.keys(c).sort((a,b) => c[b] - c[a])[0];
-    return `Theo: ${icons[hot]} (nóng)`;
+    // LÌ nếu sai
+    if (last.predict && !last.val.includes(last.predict)) {
+        return `${last.predict.toUpperCase()} (Lì BC)`;
+    }
+
+    // TỈ LỆ
+    const count = {};
+    h.flatMap(i => i.val).forEach(v => count[v] = (count[v] || 0) + 1);
+    const pick = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+
+    await Data.create({
+        guildId: gId,
+        type: 'bc',
+        predict: pick
+    });
+
+    return `${pick.toUpperCase()} (Tỉ lệ BC)`;
 }
 
 client.login(process.env.DISCORD_TOKEN);
-const http = require('http');
-http.createServer((req, res) => {
-    res.writeHead(200);
-    res.end('Bot Neko Bip Online!');
-}).listen(process.env.PORT || 10000);
