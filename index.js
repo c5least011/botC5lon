@@ -106,15 +106,24 @@ client.on('messageCreate', async (msg) => {
 
 // ===== INTERACTION =====
 client.on('interactionCreate', async (interaction) => {
+    // 1. AUTOCOMPLETE (Thêm try-catch để k sập bot)
     if (interaction.isAutocomplete()) {
-        const focused = interaction.options.getFocused();
-        const setups = await Setup.find({ userId: interaction.user.id });
-        return interaction.respond(setups.filter(s => s.alias.startsWith(focused)).slice(0, 25).map(s => ({ name: s.alias, value: s.alias })));
+        try {
+            const focused = interaction.options.getFocused();
+            const setups = await Setup.find({ userId: interaction.user.id });
+            const filtered = setups.filter(s => s.alias.startsWith(focused)).slice(0, 25);
+            
+            // Phải return ở đây để nó thoát hàm, k chạy xuống dưới nữa
+            return await interaction.respond(filtered.map(s => ({ name: s.alias, value: s.alias })));
+        } catch (e) {
+            return console.error("Lỗi Autocomplete:", e);
+        }
     }
 
+    // 2. CHẶN NẾU K PHẢI SLASH COMMAND
     if (!interaction.isChatInputCommand()) return;
-    const { commandName, options, user, guildId } = interaction;
 
+});
     // SETUP
     if (commandName === 'setup') {
         if (!guildId) return interaction.reply("Vào server đi m.");
@@ -163,7 +172,6 @@ client.on('interactionCreate', async (interaction) => {
         }
         return interaction.reply("❌ Sai format.");
     }
-});
 
 // ===== SOI TX (GHI ĐÈ PREDICT) =====
 async function soiCauTX(gId) {
