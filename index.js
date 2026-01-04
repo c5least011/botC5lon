@@ -40,7 +40,7 @@ const client = new Client({
 
 const NEKO_ID = "1248205177589334026";
 
-// ===== SLASH COMMANDS (DÙNG RAW VALUE CHO CHẮC CỐP) =====
+// ===== SLASH COMMANDS =====
 const commands = [
     new SlashCommandBuilder()
         .setName('setup')
@@ -48,6 +48,13 @@ const commands = [
         .setIntegrationTypes(1)
         .setContexts(0)
         .addStringOption(o => o.setName('ten').setDescription('sv1, sv2...').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('xoasetup')
+        .setDescription('Xóa tên server đã lưu')
+        .setIntegrationTypes(1)
+        .setContexts(0, 1, 2)
+        .addStringOption(o => o.setName('ten_sv').setDescription('Tên muốn xóa').setRequired(true).setAutocomplete(true)),
 
     new SlashCommandBuilder()
         .setName('dudoancobac')
@@ -83,8 +90,6 @@ client.on('messageCreate', async (msg) => {
     if (!gId) return;
 
     const content = msg.content;
-
-    // TX
     const txM = content.match(/=\s*\**(\d+)\**/);
     const sdM = content.match(/Tài\/Xỉu:\s*\**([^\*\n\s]+)\**/i);
     if (txM && sdM) {
@@ -92,7 +97,6 @@ client.on('messageCreate', async (msg) => {
         console.log(`[AUTO TX] ${gId}`);
     }
 
-    // BC
     const bcM = [...content.matchAll(/<(?:a)?:([a-zA-Z0-9]+)(?:_nk)?:\d+>/g)];
     if (bcM.length === 3) {
         await Data.create({ guildId: gId, type: 'bc', val: bcM.map(m => m[1].toLowerCase()) });
@@ -111,6 +115,7 @@ client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     const { commandName, options, user, guildId } = interaction;
 
+    // SETUP
     if (commandName === 'setup') {
         if (!guildId) return interaction.reply("Vào server đi m.");
         const alias = options.getString('ten');
@@ -118,6 +123,15 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.reply(`✅ Setup xong: **${alias}**`);
     }
 
+    // XÓA SETUP (MỚI THÊM)
+    if (commandName === 'xoasetup') {
+        const alias = options.getString('ten_sv');
+        const deleted = await Setup.findOneAndDelete({ userId: user.id, alias });
+        if (deleted) return interaction.reply(`🗑️ Đã xóa tên lưu: **${alias}** (Data ván đấu vẫn còn).`);
+        return interaction.reply("❌ K thấy tên này để xóa.");
+    }
+
+    // DUDOAN
     if (commandName === 'dudoancobac') {
         const alias = options.getString('ten_sv');
         const loai = options.getString('loai');
@@ -129,6 +143,7 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.editReply(`📊 **[${alias}]** ${res}`);
     }
 
+    // LUUCAU
     if (commandName === 'luucau') {
         const alias = options.getString('ten_sv');
         const raw = options.getString('noidung');
@@ -150,53 +165,29 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// ===== SOI TX (ĐÃ FIX - GHI ĐÈ PREDICT) =====
+// ===== SOI TX (GHI ĐÈ PREDICT) =====
 async function soiCauTX(gId) {
     const h = await Data.find({ guildId: gId, type: 'tx', side: { $exists: true } }).sort({ createdAt: -1 }).limit(20);
     if (h.length < 5) return "Ít data, né.";
-
     const last = h[0];
-
-    // LÌ nếu sai (Check ván vừa rồi có predict ko và có trúng ko)
-    if (last.predict && last.side !== last.predict) {
-        return `${last.predict.toUpperCase()} (Lì)`;
-    }
-
-    // TỈ LỆ
+    if (last.predict && last.side !== last.predict) return `${last.predict.toUpperCase()} (Lì)`;
     let t = 0, x = 0;
     h.forEach(i => i.side === 'Tài' ? t++ : x++);
     const pick = t >= x ? 'Tài' : 'Xỉu';
-
-    // Cập nhật dự đoán vào chính ván vừa rồi để ván sau check "Lì"
     await Data.findByIdAndUpdate(last._id, { predict: pick }); 
-
     return `${pick.toUpperCase()} (Tỉ lệ)`;
 }
 
-// ===== SOI BC (GIỮ NGUYÊN THEO Ý M) =====
+// ===== SOI BC (PATTERN CŨ) =====
 async function soiCauBC(gId) {
-    const h = await Data.find({ guildId: gId, type: 'bc', val: { $exists: true } })
-        .sort({ createdAt: -1 }).limit(15);
+    const h = await Data.find({ guildId: gId, type: 'bc', val: { $exists: true } }).sort({ createdAt: -1 }).limit(15);
     if (h.length < 5) return "Ít data, né.";
-
     const last = h[0];
-
-    // LÌ nếu sai
-    if (last.predict && !last.val.includes(last.predict)) {
-        return `${last.predict.toUpperCase()} (Lì BC)`;
-    }
-
-    // TỈ LỆ
+    if (last.predict && !last.val.includes(last.predict)) return `${last.predict.toUpperCase()} (Lì BC)`;
     const count = {};
     h.flatMap(i => i.val).forEach(v => count[v] = (count[v] || 0) + 1);
     const pick = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
-
-    await Data.create({
-        guildId: gId,
-        type: 'bc',
-        predict: pick
-    });
-
+    await Data.create({ guildId: gId, type: 'bc', predict: pick });
     return `${pick.toUpperCase()} (Tỉ lệ BC)`;
 }
 
