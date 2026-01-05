@@ -239,7 +239,7 @@ client.on('interactionCreate', async (interaction) => {
                 val: parseInt(txM[1]),
                 side: sdM[1].trim()
             });
-            return interaction.reply(`✅ Đã lưu TX [${alias}]`);
+            return interaction.reply(`✅ Đã lưu TX ở sv với tên [${alias}]`);
         }
         
         const bcM = [...raw.matchAll(/<(?:a)?:([a-zA-Z0-9]+)(?:_nk)?:\d+>/g)];
@@ -249,7 +249,7 @@ client.on('interactionCreate', async (interaction) => {
                 type: 'bc',
                 val: bcM.map(m => m[1].toLowerCase())
             });
-            return interaction.reply(`✅ Đã lưu BC [${alias}]`);
+            return interaction.reply(`✅ Đã lưu BC ở sv với tên [${alias}]`);
         }
 
         return interaction.reply("❌ Format tin nhắn m dán k đúng.");
@@ -330,7 +330,7 @@ async function soiCauBC(gId) {
 const http = require('http');
 http.createServer((req, res) => {
     res.writeHead(200);
-    res.end('Bot Neko Bip is Online 24/7!');
+    res.end('C5_botcobac đang sống và m có thể cut đc r');
 }).listen(process.env.PORT || 10000);
 
 client.login(process.env.DISCORD_TOKEN);
